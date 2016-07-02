@@ -12,16 +12,16 @@
 error_reporting(0);
 
 $s['hostname'] = 'localhost';
-$s['username'] = 'neeao.com';
-$s['password'] = 'neeao.com';
-$s['dbname']   = 'neeao.com';
+$s['username'] = '';
+$s['password'] = '';
+$s['dbname']   = '';
 $s['sa_pre']   = 'sablog_';
 $s['wp_pre']   = 'wp_';
 $s['sa_dir']   = 'sa/';
-$s['wp_dir']   = './';
-$s['wp_url']   = 'http://neeao.com/';
+$s['wp_dir']   = 'wp/';
+$s['wp_url']   = 'http://www.snailium.com/';
 
-#$s['web_root'] = 'D:\\wwwroot\\maker\\wwwroot\\';
+#$s['web_root'] = '/var/www/html/snailium/sa-wp/';
 
 $s['wp_root']  = $s['web_root'].$s['wp_dir'];
 
@@ -50,14 +50,14 @@ if($_GET['step'] == '1'){
 	$res = mysql_query($sql);
 	while($a = mysql_fetch_array($res)){
 		if(!file_exists($s['wp_dir'].'/wp-content/uploads/')){
-			mkdir($s['wp_dir'].'/wp-content/uploads/','0777');
+			mkdir($s['wp_dir'].'/wp-content/uploads/',0777);
 		}
 		if(!file_exists($s['wp_dir'].'/wp-content/uploads/'.date("Y",$a['dateline']))){
-			mkdir($s['wp_dir'].'/wp-content/uploads/'.date("Y",$a['dateline']),'0777');
+			mkdir($s['wp_dir'].'/wp-content/uploads/'.date("Y",$a['dateline']),0777);
 		}
 
 		if(!file_exists($s['wp_dir'].'/wp-content/uploads/'.date("Y",$a['dateline']).'/'.date("m",$a['dateline']))){
-			mkdir($s['wp_dir'].'/wp-content/uploads/'.date("Y",$a['dateline']).'/'.date("m",$a['dateline']),'0777');
+			mkdir($s['wp_dir'].'/wp-content/uploads/'.date("Y",$a['dateline']).'/'.date("m",$a['dateline']),0777);
 		}
 		#mb_convert_encoding($a['filename'], "gbk", "utf-8");
 		$new = $s['wp_dir'].'wp-content/uploads/'.date("Y",$a['dateline']).'/'.date("m",$a['dateline']).'/'.$a['attachmentid'].'_'.$a['filename'];
@@ -82,15 +82,15 @@ if($_GET['step'] == '1_5'){
 	include 'imgs.inc.php';
 	$num = isset($_GET['num'])?$_GET['num']:0;
 	if($imgs){
-		for($i=$num;$i<$num+10;$i++){
+		for($i=$num;$i<$num+50;$i++){
 			wp_create_thumbnail($imgs[$i]);
 			if($i >= count($imgs)){
 				m('缩略图生成完毕','?step=2');
 				exit;
 			}
 		}
-		$n = (string)($num+10);
-		$p = ($num+10)/count($imgs);
+		$n = (string)($num+50);
+		$p = ($num+50)/count($imgs)*100;
 		m($p.'%', '?step=1_5&num='.$n);
 	}
 }
@@ -258,13 +258,13 @@ if($_GET['step'] == '4'){
 					'".date("Y-m-d H:i:s",$a['dateline'])."',
 					'".date("Y-m-d H:i:s",$a['dateline'])."',
 					'".addslashes($a['content'])."',
-					'".$a['title']."',
+					'".addslashes($a['title'])."',
 					'',
 					'publish',
 					'open',
 					'open',
-					'".$a['readpassword']."',
-					'".substr(urlencode($a['title']),150)."',
+					'".addslashes($a['readpassword'])."',
+					'".addslashes(substr(urlencode($a['title']),150))."',
 					'',
 					'',
 					'".date("Y-m-d H:i:s",$a['dateline'])."',
@@ -448,7 +448,7 @@ function w($file, $content, $mode = 'w'){//write file
 
 function arr2files($array,$array_name, $filename = ''){//保存数组
 	$filename = $filename === ''? C_DIR.$array_name : $filename;
-	$str      = "<?\n";
+	$str      = "<?php\n";
 	$str     .= "\${$array_name} = ";
 	$str     .= var_export($array,1);
 	$str     .= ";";
