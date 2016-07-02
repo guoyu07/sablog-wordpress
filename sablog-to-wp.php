@@ -1,93 +1,52 @@
 <?php
 /**
- * Sablog-X 1.6 ->WordPress 2.2.3 动数据转移程序
+ * Sablog-X 2.0 20100301 ->WordPress 3.5.1 数据转移程序 code by Neeao
  *
  * 说明:本程序用来实现Sablog-X至WordPress数据转移.
+ * 
+ * 本程序基于maker Sablog-X 1.6 => WordPress 2.2.3 转换程序 – 080422 测试版
+ * 
+ * updated : 2013-6-15
  *
- * author:maker<m4ker@163.com>
- * QQ:35650697
- *
- * updated : 2008-4-22
  */
-#########################################################
+error_reporting(0);
+
 $s['hostname'] = 'localhost';
-$s['username'] = 'root';
-$s['password'] = '';
-$s['dbname']   = 's-w';
+$s['username'] = 'neeao.com';
+$s['password'] = 'neeao.com';
+$s['dbname']   = 'neeao.com';
 $s['sa_pre']   = 'sablog_';
 $s['wp_pre']   = 'wp_';
 $s['sa_dir']   = 'sa/';
-$s['wp_dir']   = 'wp/';
-$s['wp_url']   = 'http://www.m4ker.net/';
-#########################################################
+$s['wp_dir']   = './';
+$s['wp_url']   = 'http://neeao.com/';
+
 #$s['web_root'] = 'D:\\wwwroot\\maker\\wwwroot\\';
-?>
-<html>
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<title></title>
-</head>
-<body>
-<!--
------------------------------
-1.移动附件
 
-2.生成缩略图
-    thmub....ext
-3.导入分类
-	categories -> category
-
-4.导入附件
-	attachments -> posts
-	            -> postmeta
-
-5.导入文章
-	articles -> posts
-	         -> post2cat
-
-6.修改附件所属文章
-	posts.parent_id
-
-  修改文章guid
-	post.guid
-
-7.导入评论
-	comments -> comment
-
-8.导入链接
-	links -> link
-	      -> link2cat
-
-#导入统计
-#导入设置
-	setting -> option
-						blogname
-						blogdescription
-
-------------------------------
--->
-<?
 $s['wp_root']  = $s['web_root'].$s['wp_dir'];
 
-$c = $att = $art = $ud = $attinfo = array();
+$att = $art = $ud = $attinfo = array();
 
-/**
- *Db Connect
- */
-if(!mysql_connect ( $s['hostname'], $s['username'], $s['password'])){
+title();
+$db=mysql_connect ( $s['hostname'], $s['username'], $s['password']);
+if(!$db){
 	echo "数据库连接错误,请确认配置信息.";
 }
-mysql_select_db($s['dbname']);
-mysql_query('set names "utf8"');
+mysql_select_db($s['dbname'],$db);
+mysql_query('set names "utf8"',$db);
 
-if($_GET['step'] == '1' OR !$_GET['step']){
+if(!$_GET['step']){
+	m("开始进行数据转移","?step=1");
+}
+
+if($_GET['step'] == '1'){
 	/**
 	 * 移动附件
 	 */
 	$imgs = array();
 	$sql = "SELECT * 
 			FROM `".$s['sa_pre']."attachments` 
-			ORDER BY `attachmentid` DESC";
+			ORDER BY `attachmentid` ASC";
 	$res = mysql_query($sql);
 	while($a = mysql_fetch_array($res)){
 		if(!file_exists($s['wp_dir'].'/wp-content/uploads/')){
@@ -101,9 +60,9 @@ if($_GET['step'] == '1' OR !$_GET['step']){
 			mkdir($s['wp_dir'].'/wp-content/uploads/'.date("Y",$a['dateline']).'/'.date("m",$a['dateline']),'0777');
 		}
 		#mb_convert_encoding($a['filename'], "gbk", "utf-8");
-		$new = $s['wp_dir'].'wp-content/uploads/'.date("Y",$a['dateline']).'/'.date("m",$a['dateline']).'/'.$a['attachmentid'].'_'.mb_convert_encoding($a['filename'], "gbk", "utf-8");
+		$new = $s['wp_dir'].'wp-content/uploads/'.date("Y",$a['dateline']).'/'.date("m",$a['dateline']).'/'.$a['attachmentid'].'_'.$a['filename'];
 		
-		if(!rename('sa/attachments'.$a['filepath'],$new)){
+		if(!copy('sa/attachments'.$a['filepath'],$new)){
 			echo '<b>ERROR:</b>'.$a['filepath'].' --> '.$new."<br>\n";
 		}else{
 			$type = getimagesize($new);
@@ -111,9 +70,8 @@ if($_GET['step'] == '1' OR !$_GET['step']){
 				$imgs[] = $new;
 			}
 		}
-
 	}
-	arr2file('imgs', 'imgs.inc');
+	arr2files($imgs,'imgs', 'imgs.inc');
 	if($imgs)
 		m("附件移动完毕,下一部生成缩略图","?step=1_5");
 	else
@@ -123,7 +81,6 @@ if($_GET['step'] == '1' OR !$_GET['step']){
 if($_GET['step'] == '1_5'){
 	include 'imgs.inc.php';
 	$num = isset($_GET['num'])?$_GET['num']:0;
-
 	if($imgs){
 		for($i=$num;$i<$num+10;$i++){
 			wp_create_thumbnail($imgs[$i]);
@@ -142,58 +99,28 @@ if($_GET['step'] == '2'){
 	/**
 	 *导入分类
 	 */
-
-	$sql = "SELECT * 
-			FROM `".$s['sa_pre']."categories` 
-			ORDER BY `displayorder` DESC";
-
-	$result = mysql_query($sql);
-	while($category = mysql_fetch_array($result)){
-
-		$sql = "INSERT INTO `wp_categories` (
-					`cat_ID` ,
-					`cat_name` ,
-					`category_nicename` ,
-					`category_description` ,
-					`category_parent` ,
-					`category_count` ,
-					`link_count` ,
-					`posts_private` ,
-					`links_private`
-				)VALUES (
-					NULL ,
-					'".$category['name']."',
-					'".$category['name']."',
-					' ',
-					'0',
-					'".$category['articles']."',
-					'0',
-					'0',
-					'0'
-				);";
-		
-		if(mysql_query($sql)){
-			echo $category['name']." 导入成功<br>";
-		}
-		$c[$category['cid']] = mysql_insert_id();
-	}
-	arr2file('c','c.inc');
-	m("分类数据导入完毕","?step=3");
+	metas("category");
+	m("分类数据导入完毕","?step=2_5");
 }
 
+if($_GET['step'] == '2_5'){
+	/**
+	 *导入tag
+	 */
+	metas("tag");
+	m("tag数据导入完毕","?step=3");
+}
 
 if($_GET['step'] == '3'){
 	/**
-	 *导入附件
+	 *导入附件数据
 	 */
 
 	$sql = "SELECT * 
 			FROM `".$s['sa_pre']."attachments` 
 			ORDER BY `attachmentid` ASC";
-	
 	$result = mysql_query($sql);
 	while($attach = mysql_fetch_array($result)){
-	
 		$sql = "INSERT INTO `wp_posts` (
 					`ID` ,
 					`post_author` ,
@@ -201,7 +128,6 @@ if($_GET['step'] == '3'){
 					`post_date_gmt` ,
 					`post_content` ,
 					`post_title` ,
-					`post_category` ,
 					`post_excerpt` ,
 					`post_status` ,
 					`comment_status` ,
@@ -226,7 +152,6 @@ if($_GET['step'] == '3'){
 					'".date("Y-m-d H:i:s",$attach['dateline'])."',
 					'',
 					'".$attach['attachmentid'].'_'.$attach['filename']."',
-					'0',
 					'',
 					'inherit',
 					'open',
@@ -274,7 +199,6 @@ if($_GET['step'] == '3'){
 					)";
 			#echo $sql."<br>";
 			mysql_query($sql);
-
 			$sql = "INSERT INTO `wp_postmeta` (
 						`meta_id` ,
 						`post_id` ,
@@ -289,39 +213,21 @@ if($_GET['step'] == '3'){
 			mysql_query($sql);
 
 	}
-	arr2file('att','att.inc');
+	arr2files($att,'att','att.inc');
 	m("附件数据导入完毕","?step=4");
 }
-	if($_GET['step'] == '4'){
+if($_GET['step'] == '4'){
 	/** 
 	 * 移动文章
 	 */
 	include_once "att.inc.php";
-	include_once "c.inc.php";
-	$sql = "SELECT * 
-			FROM `".$s['sa_pre']."articles` 
-			ORDER BY `articleid` DESC";
+	include_once "category.inc.php";
+	include_once "tag.inc.php";
+
+	$sql = "SELECT * FROM `".$s['sa_pre']."articles` ORDER BY `articleid` ASC";
 	$res = mysql_query($sql);
 	while($a = mysql_fetch_array($res)){
-		#articles -> posts
-		#         -> post2cat
-		$atta = unserialize($a['attachments']);
-
-
-		if($atta){
-			foreach($atta as $k=>$v){
-				$attinfo[$v['attachmentid']] = array_merge($v,$attinfo);
-			}
-			#arr2file('attinfo','attinfo.inc');
-			$a['content'] = preg_replace("/\[attach=(\d+)\]/ie", "a2s('\\1')", $a['content']);
-
-			foreach($atta as $k=>$v){
-				if(!$ud[$v['attachmentid']]){
-					$a['content'] .= a2s($v);
-				}
-			}
-		}
-
+		$a['content'] = preg_replace("/\[attach=(\d+)\]/ie", "a2s('\\1')", $a['content']);
 		$sql = "INSERT INTO `wp_posts` (
 					`ID` ,
 					`post_author` ,
@@ -329,7 +235,6 @@ if($_GET['step'] == '3'){
 					`post_date_gmt` ,
 					`post_content` ,
 					`post_title` ,
-					`post_category` ,
 					`post_excerpt` ,
 					`post_status` ,
 					`comment_status` ,
@@ -352,15 +257,14 @@ if($_GET['step'] == '3'){
 					'1',
 					'".date("Y-m-d H:i:s",$a['dateline'])."',
 					'".date("Y-m-d H:i:s",$a['dateline'])."',
-					'".$a['content']."',
+					'".addslashes($a['content'])."',
 					'".$a['title']."',
-					'0',
 					'',
 					'publish',
 					'open',
 					'open',
-					'',
-					'".urlencode($a['title'])."',
+					'".$a['readpassword']."',
+					'".substr(urlencode($a['title']),150)."',
 					'',
 					'',
 					'".date("Y-m-d H:i:s",$a['dateline'])."',
@@ -374,32 +278,25 @@ if($_GET['step'] == '3'){
 					'".$a['comments']."'
 				)";
 
-		mysql_query($sql);
-		$art[$a['articleid']] = mysql_insert_id();
-
-		$sql = "INSERT INTO `wp_post2cat` (
-					`rel_id` ,
-					`post_id` ,
-					`category_id`
-				)
-				VALUES (
-					NULL ,
-					'".mysql_insert_id()."',
-					'".$c[$a['cid']]."'
-				)";
-
-		mysql_query($sql);
+		$ret=mysql_query($sql);
+		if($ret){
+			$new_art_id = mysql_insert_id();
+			$art[$a['articleid']] = $new_art_id;
+			//分类
+			relationships($a['articleid'],$new_art_id,$category);
+			//tags
+			relationships($a['articleid'],$new_art_id,$tag);
+		}else{
+			echo "mysql错误：".mysql_error();
+			print_r($sql);
+		}
 	}
-
-	arr2file('art','art.inc');
-
+	arr2files($art,'art','art.inc');
 	m("文章数据导入完毕","?step=5");
 }
 
 if($_GET['step'] == '5'){
-
 	include_once "art.inc.php";
-
 	$sql = "SELECT * 
 			FROM `wp_posts` 
 			WHERE `post_type`='post'";
@@ -410,21 +307,16 @@ if($_GET['step'] == '5'){
 				SET `guid` = '".$s['wp_url']."?p=".$a[ID]."' 
 				WHERE `ID` =".$a['ID']." 
 				LIMIT 1 ;";
-		#echo $sql."<br>";
 		mysql_query($sql);
 	}
-
 	$sql = "SELECT * 
 			FROM `wp_posts` 
 			WHERE `post_type`='attachment'";
-	
 	$res = mysql_query($sql);
 	while($a = mysql_fetch_array($res)){
-	
 		$sql = "UPDATE `wp_posts` 
 				SET `post_parent` = '".$art[$a['post_parent']]."' 
 				WHERE `ID` =".$a['ID']." LIMIT 1 ;";
-	
 		mysql_query($sql);
 	}
 	m("数据矫正完毕","?step=6");
@@ -432,7 +324,6 @@ if($_GET['step'] == '5'){
 
 if($_GET['step'] == '6'){
 	include_once "art.inc.php";
-	
 	$sql = "SELECT * 
 			FROM `".$s['sa_pre']."comments` 
 			WHERE `visible`=1 ORDER BY `dateline` ASC";
@@ -476,83 +367,94 @@ if($_GET['step'] == '6'){
 	
 		mysql_query($sql);
 	}
-	m("评论导入完毕","?step=7");
-}
-
-
-if($_GET['step'] == '7'){
-	
-	$sql = "SELECT * 
-			FROM `".$s['sa_pre']."links` 
-			WHERE `visible`=1 
-			ORDER BY `displayorder` ASC";
-	
-	$res = mysql_query($sql);
-	while($link = mysql_fetch_array($res)){
-	
-		$sql = "INSERT INTO `wp_links` (
-					`link_id` ,
-					`link_url` ,
-					`link_name` ,
-					`link_image` ,
-					`link_target` ,
-					`link_category` ,
-					`link_description` ,
-					`link_visible` ,
-					`link_owner` ,
-					`link_rating` ,
-					`link_updated` ,
-					`link_rel` ,
-					`link_notes` ,
-					`link_rss`
-				)VALUES (
-					NULL ,
-					'".$link['url']."',
-					'".addslashes($link['name'])."',
-					'',
-					'',
-					'0',
-					'".addslashes($link['note'])."',
-					'Y',
-					'1',
-					'0',
-					'0000-00-00 00:00:00',
-					'',
-					'',
-					''
-				);";
-
-		if(!mysql_query($sql)){echo $sql."<br>";}
-		$sql1 = "INSERT INTO `wp_link2cat` (
-					`rel_id` ,
-					`link_id` ,
-					`category_id`
-				)VALUES (
-					NULL ,
-					'".mysql_insert_id()."',
-					'2'
-				);";
-		mysql_query($sql1);
-	}
 	m("数据转移完毕","#");
 }
 
 
+function relationships($old_id,$new_id,$terms){
+	global $db;
+	if(count($terms)>0){
+		foreach($terms as $tid=>$taxids){
+			if(in_array($old_id,$taxids)){
+				$sql = "INSERT INTO `wp_term_relationships` (
+					`object_id` ,
+					`term_taxonomy_id` ,
+					`term_order`
+				)
+				VALUES (
+					".$new_id." ,
+					".$tid.",
+					0
+				)";
+				mysql_query($sql,$db);
+			}	
+		}
+	}
+}
+
+function metas($type){
+	global $db;
+	global $s;
+	$t=array();
+	$post_tag="post_tag";
+	if($type=="category"){
+		$post_tag="category";
+	}
+	$sql = "SELECT * FROM `".$s['sa_pre']."metas` where type='".$type."' ORDER BY `mid` ASC";
+	$result = mysql_query($sql,$db);
+	while($tag = mysql_fetch_array($result)){
+		$sql_term = "INSERT INTO `wp_terms` (`name` ,`slug`)VALUES ('".$tag['name']."','".$tag['slug']."');";
+		if(mysql_query($sql_term)){
+			$new_id = mysql_insert_id();
+			$sql_taxonomy = "INSERT INTO `wp_term_taxonomy` (
+				`term_id` ,
+				`taxonomy`,
+				`description`,
+				`parent`,
+				`count`
+				)VALUES (
+				".$new_id.",
+				'".$post_tag."',
+				'',
+				0,
+				0
+			);";
+			if(mysql_query($sql_taxonomy,$db)){
+				echo $tag['name']." 导入成功<br>";
+			}
+			//term_taxonomy_id
+			$term_taxonomy_id=mysql_insert_id($db);
+			//查询mid 对应的文章id
+			$sql_rs="SELECT cid FROM ".$s['sa_pre']."relationships WHERE mid = ".$tag['mid'];
+			$cid_result = mysql_query($sql_rs,$db);
+			$cids = array();
+			while($relationship = mysql_fetch_array($cid_result)){
+				array_push($cids,$relationship['cid']);
+			}
+			$sql_count="update `wp_term_taxonomy` set count=".count($cids)." where term_taxonomy_id=".$term_taxonomy_id;
+			mysql_query($sql_count,$db);
+
+			$t[$term_taxonomy_id] = $cids;
+		}
+		
+	}
+	arr2files($t,$type,$type.'.inc');
+}
 
 function w($file, $content, $mode = 'w'){//write file
 	$f = fopen($file, $mode);
 	return fputs($f, $content);
 }
 
-function arr2file($array_name, $filename = ''){//保存数组
+function arr2files($array,$array_name, $filename = ''){//保存数组
 	$filename = $filename === ''? C_DIR.$array_name : $filename;
-	$array    = $GLOBALS[$array_name];
 	$str      = "<?\n";
 	$str     .= "\${$array_name} = ";
 	$str     .= var_export($array,1);
 	$str     .= ";";
 	return w($filename.'.php',$str);
 }
+
 
 function t($filename){
 	$filename = str_replace(array('.gif','.GIF'),'.thumbnail.gif', $filename);
@@ -561,30 +463,26 @@ function t($filename){
 	return $filename;
 }
 
-function a2s($a)
+function a2s($att_id)
 {
-	global $att,$ud,$attinfo,$s;
+	global $att,$s;
+	$sql = "SELECT * FROM `".$s['sa_pre']."attachments` where attachmentid=".$att_id;
+	$res = mysql_query($sql);
+	$arr = mysql_fetch_array($res);
 	$att_str = '';
-	if(is_array($a)){
-		$arr = $a;
-	}else{
-		$arr = $attinfo[$a];
-	}
 	$filepath = $s['wp_url']."wp-content/uploads/".date("Y",$arr['dateline']).'/'.date("m",$arr['dateline']).'/'.$arr['attachmentid'].'_'.$arr['filename'];
-	#print_r($arr);
 	if($arr['isimage'])
 	{
 		$att_str = "<p>".(is_array($a)?"<b>图片附件:</b><br />":'')."<a rel=\"attachment wp-att-".$att[$arr['attachmentid']]."\" href=\"".$s['wp_url']."?attachment_id=".$att[$arr['attachmentid']]."\" title=\"".$arr['filename']."\"><img src=\"".t($filepath)."\" alt=\"".$arr['filename']."\" /></a></p>\n";
 	}else{
 		$att_str = "<p><b>附件:</b><a href=\"".$filepath."\" target=\"_blank\">".$arr['filename']."</a>(".$arr['filesize']." Byte)</p>\n";
 	}
-	$ud[$arr['attachmentid']] = true;
 	return $att_str;
 }
 
 function m($msg,$url)
 {
-	echo '<meta http-equiv="REFRESH" content="1;URL='.$url.'">';
+	//echo '<meta http-equiv="REFRESH" content="1;URL='.$url.'">';
 	echo "<a href=\"$url\">{$msg},点击进行下一步!</a>";
 }
 
@@ -682,10 +580,23 @@ function wp_create_thumbnail( $file, $max_side = 128, $effect = '' ) {
 //		return apply_filters( 'wp_create_thumbnail', $thumbpath );
 //	}
 }
+ini_set('date.timezone','Asia/Shanghai');
 
 
+function title(){
+?>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Sablog-X 2.0 20100301 ->WordPress 3.5.1 数据转移程序 Code By Neeao</title>
+</head>
+<body>
+Sablog-X 2.0 20100301 ->WordPress 3.5.1 数据转移程序 code by Neeao 
+<hr>
+<?php
+}	
 ?>
 <hr>
-<?=date("H:i:s")?>
+<a href="Http://neeao.com">Neeao.com</a>
 </body>
 </html>
